@@ -1,0 +1,114 @@
+name: DocMind CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  JAVA_VERSION: '21'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/docmind
+
+jobs:
+  # ── Job 1: Build and Unit Test ─────────────────────────────────────────────
+  build-and-test:
+    name: Build & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'maven'    # Cache ~/.m2 between runs for faster builds
+
+      - name: Build and run unit tests
+        run: ./mvnw clean verify -B
+        env:
+          # Unit tests mock LLMs — no real API keys needed
+          OPENAI_API_KEY: "test-key-not-used-in-unit-tests"
+
+      - name: Upload test reports
+        uses: actions/upload-artifact@v4
+        if: always()    # Upload even on failure for debugging
+        with:
+          name: test-reports
+          path: '**/target/surefire-reports/*.xml'
+          retention-days: 7
+
+      - name: Upload code coverage
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: coverage-report
+          path: '**/target/site/jacoco/'
+
+  # ── Job 2: Docker Build and Push ──────────────────────────────────────────
+  docker-build:
+    name: Build & Push Docker Image
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write   # Needed to push to GHCR
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx (for multi-platform builds)
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha      # Use GitHub Actions cache for Docker layer cache
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64   # Multi-arch for Apple Silicon + x86
+
+  # ── Job 3: Security Scan ──────────────────────────────────────────────────
+  security-scan:
+    name: Security Vulnerability Scan
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner (file system mode)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'             # Fail CI on CRITICAL/HIGH vulnerabilities
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'

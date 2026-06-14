@@ -1,0 +1,36 @@
+# ── Secrets (NEVER commit these) ──────────────────────────
+.env
+*.key
+*.pem
+secrets/
+
+# ── Build output ──────────────────────────────────────────
+target/
+*.jar
+*.war
+*.class
+
+# ── IDE files ─────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+*.code-workspace
+.project
+.classpath
+.settings/
+
+# ── Maven wrapper ─────────────────────────────────────────
+!.mvn/wrapper/maven-wrapper.properties
+!.mvn/wrapper/maven-wrapper.jar
+
+# ── OS files ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Logs ─────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Docker ────────────────────────────────────────────────
+# Don't ignore docker-compose.yml — that's part of the project
+.dockerignore

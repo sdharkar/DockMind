@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.docmind</groupId>
+        <artifactId>docmind</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>docmind-common</artifactId>
+    <name>DocMind Common — Shared DTOs and Domain Models</name>
+    <description>
+        Shared domain models, DTOs, and utilities.
+        Zero Spring dependencies — keeps the model layer clean and portable.
+    </description>
+
+    <dependencies>
+        <!-- Jackson annotations for JSON serialization control -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-annotations</artifactId>
+            <!-- version managed by spring-boot-starter-parent -->
+        </dependency>
+        <!-- JSR-380 bean validation annotations -->
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+            <!-- version managed by spring-boot-starter-parent -->
+        </dependency>
+    </dependencies>
+</project>

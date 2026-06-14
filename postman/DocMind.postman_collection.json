@@ -1,0 +1,207 @@
+{
+  "info": {
+    "name": "DocMind API",
+    "description": "Complete API collection for DocMind — Multi-Model RAG Knowledge Assistant.\n\nSetup:\n1. Set the `baseUrl` collection variable to your DocMind instance (default: http://localhost:8080)\n2. Ingest a document first, then run the query examples.\n\nWorkflow:\n  POST /api/v1/documents → Ingest document → get documentId\n  POST /api/v1/query     → Ask question → get grounded answer",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "documentId",
+      "value": "",
+      "type": "string",
+      "description": "Set this after ingesting a document (from the response body)"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Info",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/actuator/health",
+            "description": "Check application health including ChromaDB and LLM connectivity."
+          }
+        },
+        {
+          "name": "Prometheus Metrics",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/actuator/prometheus",
+            "description": "Raw Prometheus metrics (scrape endpoint for Grafana)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Document Ingestion",
+      "item": [
+        {
+          "name": "Ingest PDF Document",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/documents",
+            "description": "Upload a PDF file to the knowledge base.\n\nReplace 'path/to/your.pdf' with an actual file path in Postman's form-data body.",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "path/to/your.pdf",
+                  "description": "PDF or plain text file to ingest"
+                },
+                {
+                  "key": "sourceTag",
+                  "value": "product-manual",
+                  "type": "text",
+                  "description": "Optional tag for filtering queries to this document"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.documentId) {",
+                  "    pm.collectionVariables.set('documentId', response.documentId);",
+                  "    console.log('Document ingested. ID:', response.documentId);",
+                  "}",
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Response has documentId', () => pm.expect(response.documentId).to.be.a('string'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ingest Plain Text",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/documents",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "path/to/document.txt"
+                },
+                {
+                  "key": "sourceTag",
+                  "value": "knowledge-base",
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "RAG Queries",
+      "item": [
+        {
+          "name": "Basic Query",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/query",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What is the main topic of the ingested document?\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Simple query against all documents in the knowledge base."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Has answer', () => pm.expect(body.answer).to.be.a('string').and.not.empty);",
+                  "pm.test('Has validated flag', () => pm.expect(body.validated).to.be.a('boolean'));",
+                  "pm.test('Has sources', () => pm.expect(body.sources).to.be.an('array'));",
+                  "pm.test('Has latency', () => pm.expect(body.latencyMs).to.be.a('number'));",
+                  "console.log('Answer:', body.answer);",
+                  "console.log('Validated:', body.validated);",
+                  "console.log('Retries:', body.retryCount);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Query with Source Filter",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/query",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What are the key features described?\",\n  \"sourceFilter\": \"product-manual\",\n  \"maxSources\": 5\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Query filtered to a specific source tag (only searches documents tagged 'product-manual')."
+          }
+        },
+        {
+          "name": "Query — Validation Test (should retry)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/query",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Tell me something completely unrelated to any ingested document\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Tests the retry loop — the model should acknowledge lack of relevant context."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Error Cases",
+      "item": [
+        {
+          "name": "Query — Empty Query (400)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/v1/query",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Should return 400 Bad Request with validation error details."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "const body = pm.response.json();",
+                  "pm.test('Error type is validation-error', () => pm.expect(body.type).to.include('validation-error'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

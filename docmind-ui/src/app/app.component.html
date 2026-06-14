@@ -1,0 +1,357 @@
+<div class="app-container">
+  <!-- LEFT SIDEBAR: Document Ingestion -->
+  <aside class="sidebar-left">
+    <div class="brand-header">
+      <div class="logo-icon">🧠</div>
+      <div class="brand-name">
+        <h1>DocMind</h1>
+        <span class="badge">RAG Orchestrator</span>
+      </div>
+    </div>
+
+    <!-- Upload Section -->
+    <div class="section-container">
+      <h2>Ingest Knowledge</h2>
+      
+      <div 
+        class="drag-drop-zone"
+        [class.drag-over]="dragOver"
+        (dragover)="onDragOver($event)"
+        (dragleave)="onDragLeave($event)"
+        (drop)="onDrop($event)"
+        (click)="fileInput.click()"
+      >
+        <input 
+          #fileInput 
+          type="file" 
+          (change)="onFileSelected($event)" 
+          accept=".pdf,.txt" 
+          style="display: none;"
+        />
+        
+        <div class="zone-content" *ngIf="!selectedFile">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="icon-upload">
+            <path fill-rule="evenodd" d="M10.5 3.75a6 6 0 0 0-5.98 6.496A5.25 5.25 0 0 0 6.75 20.25H18a4.5 4.5 0 0 0 2.206-8.423 3.75 3.75 0 0 0-5.025-4.655A6 6 0 0 0 10.5 3.75Zm-.75 4.72v4.06l-1.72-1.72a.75.75 0 0 0-1.06 1.06l3 3a.75.75 0 0 0 1.06 0l3-3a.75.75 0 1 0-1.06-1.06l-1.72 1.72V8.47a.75.75 0 0 0-1.5 0Z" clip-rule="evenodd" />
+          </svg>
+          <p class="primary-text">Drag & Drop file here</p>
+          <p class="secondary-text">PDF or TXT up to 50MB</p>
+        </div>
+
+        <div class="zone-content file-selected" *ngIf="selectedFile">
+          <div class="file-icon">📄</div>
+          <p class="file-name">{{ selectedFile.name }}</p>
+          <p class="file-size">{{ formatBytes(selectedFile.size) }}</p>
+          <button class="btn-clear" (click)="selectedFile = null; $event.stopPropagation();">Change</button>
+        </div>
+      </div>
+
+      <!-- Tag Metadata -->
+      <div class="form-group">
+        <label for="uploadTag">Metadata Tag (optional)</label>
+        <input 
+          type="text" 
+          id="uploadTag" 
+          placeholder="e.g. user-manual, legal-2026" 
+          [(ngModel)]="uploadTag"
+          [disabled]="isUploading"
+        />
+      </div>
+
+      <button 
+        class="btn-primary" 
+        [disabled]="!selectedFile || isUploading"
+        (click)="ingestDocument()"
+      >
+        <span *ngIf="!isUploading">Ingest to ChromaDB</span>
+        <span *ngIf="isUploading" class="spinner-container">
+          <span class="spinner"></span> Processing...
+        </span>
+      </button>
+
+      <!-- Status Alerts -->
+      <div 
+        *ngIf="uploadStatusMessage" 
+        class="status-banner"
+        [class.success]="uploadStatusType === 'success'"
+        [class.error]="uploadStatusType === 'error'"
+      >
+        {{ uploadStatusMessage }}
+      </div>
+    </div>
+
+    <!-- Active Files List -->
+    <div class="section-container doc-list-section">
+      <div class="section-header">
+        <h2>Ingested Corpus</h2>
+        <span class="counter-badge">{{ documents.length }}</span>
+      </div>
+
+      <div class="loader-container" *ngIf="isLoadingDocs">
+        <div class="pulse-loader"></div>
+        <p>Syncing Vector Store...</p>
+      </div>
+
+      <div class="empty-state" *ngIf="!isLoadingDocs && documents.length === 0">
+        <div class="empty-icon">📭</div>
+        <p>No documents ingested yet.</p>
+        <p class="help-text">Upload files to populate the knowledge base.</p>
+      </div>
+
+      <div class="doc-list" *ngIf="!isLoadingDocs && documents.length > 0">
+        <div class="doc-card" *ngFor="let doc of documents">
+          <div class="doc-details">
+            <div class="doc-info-row">
+              <span class="doc-name" [title]="doc.fileName">{{ doc.fileName }}</span>
+              <span class="doc-tag" *ngIf="doc.sourceTag && doc.sourceTag !== 'untagged'">
+                {{ doc.sourceTag }}
+              </span>
+            </div>
+            <div class="doc-meta-row">
+              <span>{{ doc.totalChunks }} chunks</span>
+              <span class="separator">•</span>
+              <span>{{ formatBytes(doc.fileSizeBytes) }}</span>
+            </div>
+          </div>
+          <button 
+            class="btn-delete" 
+            title="Delete from knowledge base" 
+            (click)="deleteDocument(doc.documentId)"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="icon-trash">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- CENTER PANEL: Interactive Chat -->
+  <main class="chat-panel">
+    <header class="chat-header">
+      <div class="header-info">
+        <h2>Orchestrator Sandbox</h2>
+        <p>Ask questions. The agentic system retrieves context, generates, and validates responses.</p>
+      </div>
+      <div class="header-status">
+        <span class="status-dot online"></span>
+        <span class="status-text">Backend Connected</span>
+      </div>
+    </header>
+
+    <!-- Chat Messages -->
+    <div class="chat-messages-container" #chatContainer>
+      <div 
+        class="message-bubble-wrapper" 
+        *ngFor="let msg of messages"
+        [class.user-message-wrapper]="msg.role === 'user'"
+        [class.assistant-message-wrapper]="msg.role === 'assistant'"
+      >
+        <div class="message-sender-avatar">
+          {{ msg.role === 'user' ? '👤' : '🤖' }}
+        </div>
+
+        <div class="message-bubble-content">
+          <!-- Text Content -->
+          <div class="message-text" *ngIf="!msg.isThinking">
+            <p>{{ msg.content }}</p>
+          </div>
+
+          <!-- Thinking State Indicator -->
+          <div class="thinking-state" *ngIf="msg.isThinking">
+            <div class="loader-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <div class="thinking-phase-log">
+              <span class="pulse-icon">🔄</span>
+              <span class="phase-name">{{ msg.currentPhase }}</span>
+            </div>
+          </div>
+
+          <!-- Stats & Citations for Assistant Responses -->
+          <div class="assistant-footer" *ngIf="msg.role === 'assistant' && !msg.isThinking && msg.stats">
+            <div class="stats-pills">
+              <span class="stat-pill" [class.valid]="msg.stats.validated" [class.invalid]="!msg.stats.validated">
+                {{ msg.stats.validated ? '✓ Factual' : '⚠ Disclaimer' }}
+              </span>
+              <span class="stat-pill">
+                🕒 {{ msg.stats.latencyMs }}ms
+              </span>
+              <span class="stat-pill" *ngIf="msg.stats.retryCount > 0">
+                🔄 {{ msg.stats.retryCount }} retries
+              </span>
+              <span class="stat-pill">
+                🧠 {{ msg.stats.modelUsed }}
+              </span>
+            </div>
+
+            <!-- Disclaimer if Validation Failed -->
+            <div class="validation-disclaimer" *ngIf="msg.stats.disclaimer">
+              {{ msg.stats.disclaimer }}
+            </div>
+
+            <!-- Sources Collapsible Button -->
+            <div class="sources-collapsible" *ngIf="msg.sources && msg.sources.length > 0">
+              <details>
+                <summary>
+                  <span>View Ground Truth Sources ({{ msg.sources.length }})</span>
+                </summary>
+                <div class="sources-details-list">
+                  <div class="source-citation-card" *ngFor="let src of msg.sources; let idx = index">
+                    <div class="citation-header">
+                      <span class="citation-index">Source #{{ idx + 1 }}</span>
+                      <span class="citation-score">Score: {{ src.score.toFixed(3) }}</span>
+                    </div>
+                    <div class="citation-body">
+                      "{{ src.content }}"
+                    </div>
+                    <div class="citation-footer" *ngIf="src.sourceTag">
+                      Tag: <span class="citation-tag">{{ src.sourceTag }}</span>
+                    </div>
+                  </div>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="message-timestamp">
+            {{ msg.timestamp | date:'shortTime' }}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat Input Form -->
+    <footer class="chat-input-container">
+      <form (submit)="sendQuery()" class="chat-form">
+        <!-- Optional tag filter query parameter -->
+        <div class="query-filters">
+          <div class="filter-input-wrapper">
+            <span class="filter-icon">🔍</span>
+            <input 
+              type="text" 
+              placeholder="Filter by Source Tag (optional)..." 
+              [(ngModel)]="sourceFilter" 
+              name="sourceFilter"
+              class="tag-filter-input"
+            />
+          </div>
+        </div>
+
+        <div class="input-row">
+          <input 
+            type="text" 
+            [(ngModel)]="queryText" 
+            name="query" 
+            placeholder="Ask a question against your ingested knowledge base..." 
+            autocomplete="off"
+            [disabled]="isGenerating"
+            class="text-input"
+          />
+          <button 
+            type="submit" 
+            class="btn-send" 
+            [disabled]="!queryText.trim() || isGenerating"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="icon-send">
+              <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+            </svg>
+          </button>
+        </div>
+      </form>
+    </footer>
+  </main>
+
+  <!-- RIGHT SIDEBAR: Observability & Metrics -->
+  <aside class="sidebar-right">
+    <div class="sidebar-right-header">
+      <h2>Pipeline Analytics</h2>
+      <p>Observability metrics for the last query invocation.</p>
+    </div>
+
+    <div class="metrics-grid" *ngIf="lastQueryStats">
+      <!-- Factual Validation Status -->
+      <div class="metric-card full-width" [class.pass]="lastQueryStats.validated" [class.fail]="!lastQueryStats.validated">
+        <div class="metric-label">Fact-Checked Status</div>
+        <div class="metric-value-row">
+          <span class="metric-status-icon">{{ lastQueryStats.validated ? '🛡️' : '⚠️' }}</span>
+          <span class="metric-value">{{ lastQueryStats.validated ? 'VERIFIED FACTUAL' : 'FAILED VERIFICATION' }}</span>
+        </div>
+        <p class="metric-desc">
+          {{ lastQueryStats.validated 
+            ? 'Answer is fully grounded in the retrieved sources (no hallucinations).' 
+            : 'Mistral validation failed. Answer contains ungrounded claims.' }}
+        </p>
+      </div>
+
+      <!-- Latency Meter -->
+      <div class="metric-card">
+        <div class="metric-label">Latency</div>
+        <div class="metric-value">{{ lastQueryStats.latencyMs }} <span class="unit">ms</span></div>
+        <div class="latency-indicator-bar">
+          <div 
+            class="fill" 
+            [style.width.%]="lastQueryStats.latencyMs > 5000 ? 100 : (lastQueryStats.latencyMs / 5000) * 100"
+            [class.slow]="lastQueryStats.latencyMs > 3000"
+            [class.medium]="lastQueryStats.latencyMs > 1500 && lastQueryStats.latencyMs <= 3000"
+            [class.fast]="lastQueryStats.latencyMs <= 1500"
+          ></div>
+        </div>
+        <p class="metric-desc">Total round-trip time.</p>
+      </div>
+
+      <!-- Retries -->
+      <div class="metric-card">
+        <div class="metric-label">Validation Cycles</div>
+        <div class="metric-value">{{ lastQueryStats.retryCount }} <span class="unit">retries</span></div>
+        <p class="metric-desc">Retries needed to fix factual errors.</p>
+      </div>
+
+      <!-- Models Used -->
+      <div class="metric-card full-width">
+        <div class="metric-label">Orchestration Nodes</div>
+        <div class="model-flow-diagram">
+          <div class="flow-node">
+            <span class="node-label">Retrieval</span>
+            <span class="node-engine">ChromaDB</span>
+          </div>
+          <div class="flow-arrow">➔</div>
+          <div class="flow-node primary">
+            <span class="node-label">Generation</span>
+            <span class="node-engine">GPT-4o</span>
+          </div>
+          <div class="flow-arrow">➔</div>
+          <div class="flow-node secondary">
+            <span class="node-label">Validation</span>
+            <span class="node-engine">Mistral</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty State for Metrics -->
+    <div class="metrics-empty-state" *ngIf="!lastQueryStats">
+      <div class="analytics-icon">📊</div>
+      <p>No active session data.</p>
+      <p class="help-text">Submit a query to see real-time pipeline latency and factual validation diagnostics.</p>
+    </div>
+
+    <!-- Ground Truth Citations Details -->
+    <div class="citations-container-right" *ngIf="lastQuerySources.length > 0">
+      <h3>Active Citations</h3>
+      <div class="citations-scrollable">
+        <div class="citation-block-right" *ngFor="let src of lastQuerySources; let idx = index">
+          <div class="block-header">
+            <span class="block-index">#{{ idx + 1 }}</span>
+            <span class="block-score">Score: {{ src.score.toFixed(3) }}</span>
+          </div>
+          <div class="block-text">
+            "{{ src.content }}"
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>

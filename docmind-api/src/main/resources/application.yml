@@ -1,0 +1,146 @@
+# ============================================================
+# DocMind — Spring Boot Application Configuration
+# ============================================================
+# All sensitive values (API keys, passwords) are injected
+# via environment variables using ${ENV_VAR:default} syntax.
+#
+# NEVER commit secrets to source control.
+# See .env.example for the list of required environment variables.
+# ============================================================
+
+server:
+  port: 8081
+
+spring:
+  application:
+    name: docmind-api
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+  # ── Multipart File Upload ────────────────────────────────
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB      # Max single file size
+      max-request-size: 52MB   # Max total request size (file + form fields)
+
+  # ── Spring AI Configuration ──────────────────────────────
+  ai:
+
+    # ── OpenAI (Primary LLM: GPT-4o for generation + text-embedding-3-small) ──
+    openai:
+      api-key: ${OPENAI_API_KEY}   # Required. Set via environment variable.
+      chat:
+        options:
+          model: gpt-4o            # Best quality/cost for RAG generation
+          temperature: 0.3         # Low temp → more factual, less creative (good for RAG)
+          max-tokens: 2048
+      embedding:
+        options:
+          model: text-embedding-3-small  # Fast, cheap, 1536 dims. Use text-embedding-3-large for higher quality.
+
+    # ── Ollama (Secondary LLM: Mistral for validation, runs locally) ──────────
+    # To start Ollama: docker run -d -p 11434:11434 -v ollama:/root/.ollama ollama/ollama
+    # Then pull model:  docker exec -it <container> ollama pull mistral
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        options:
+          model: ${OLLAMA_MODEL:mistral}
+          temperature: 0.1    # Very low temp → deterministic validation decisions
+
+    # ── ChromaDB Vector Store ─────────────────────────────────────────────────
+    # ChromaDB stores document embeddings for similarity search.
+    # Why ChromaDB over PGVector?
+    #   ChromaDB: purpose-built for vectors, simple Docker setup, fast prototype.
+    #   PGVector: better if you already use PostgreSQL, supports ACID transactions.
+    vectorstore:
+      chroma:
+        client:
+          host: ${CHROMA_HOST:http://localhost}
+          port: ${CHROMA_PORT:8000}
+        collection-name: ${CHROMA_COLLECTION:docmind-kb}
+        initialize-schema: true    # Auto-creates collection if it doesn't exist
+
+# ── Actuator / Management ─────────────────────────────────────────────────────
+# Exposes health, metrics, and Prometheus scraping endpoints.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always    # Show component health (ChromaDB, OpenAI) in /actuator/health
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      env: ${SPRING_PROFILES_ACTIVE:local}
+  tracing:
+    sampling:
+      probability: 1.0    # 100% trace sampling for dev. Lower to 0.1 in production.
+
+# ── SpringDoc / Swagger UI ────────────────────────────────────────────────────
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    display-request-duration: true
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.docmind: DEBUG           # Full debug logging for DocMind classes
+    org.springframework.ai: INFO # Spring AI framework logs
+    org.bsc.langgraph4j: DEBUG   # LangGraph4j execution logs (nodes, edges, state transitions)
+
+# ── Resilience4j ─────────────────────────────────────────────────────────────
+# Circuit breaker wraps the entire RAG pipeline invocation.
+# If OpenAI/Ollama are consistently failing, the CB opens and the fallback method is called.
+#
+# Sizing rationale:
+#   - sliding-window-size=10: evaluate last 10 calls (small window for fast feedback)
+#   - failure-rate-threshold=50: open CB if >50% of last 10 calls fail
+#   - wait-duration-in-open-state=30s: give external services 30s to recover
+#   - permitted-calls-in-half-open-state=3: probe with 3 calls before fully closing
+resilience4j:
+  circuitbreaker:
+    instances:
+      ragPipeline:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true    # visible in /actuator/health
+  retry:
+    instances:
+      llmCall:
+        max-attempts: 3
+        wait-duration: 2s
+        exponential-backoff-multiplier: 2.0    # 2s → 4s → 8s
+        retry-exceptions:
+          # Only retry transient errors (rate limits, timeouts, 5xx)
+          - org.springframework.ai.retry.TransientAiException
+
+# ── DocMind Custom Properties ─────────────────────────────────────────────────
+docmind:
+  ingestion:
+    chunk-size: 1024       # Characters per chunk (~256 tokens). Tune based on content type.
+    overlap: 128           # Overlap between chunks. ~12% of chunk-size is a good baseline.
+    max-file-size-mb: 50
+    supported-mime-types:
+      - application/pdf
+      - text/plain
+
+  rag:
+    validation:
+      enabled: true
+      max-retries: 3    # Max retrieve-generate-validate cycles before returning best-effort answer
