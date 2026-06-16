@@ -35,6 +35,8 @@ COPY docmind-common/pom.xml docmind-common/pom.xml
 COPY docmind-ingestion/pom.xml docmind-ingestion/pom.xml
 COPY docmind-core/pom.xml docmind-core/pom.xml
 COPY docmind-api/pom.xml docmind-api/pom.xml
+COPY docmind-eureka-server/pom.xml docmind-eureka-server/pom.xml
+COPY docmind-gateway/pom.xml docmind-gateway/pom.xml
 
 # Download all dependencies (cached as a separate layer — only invalidated when POMs change)
 RUN ./mvnw dependency:go-offline -B
@@ -44,6 +46,8 @@ COPY docmind-common/src docmind-common/src
 COPY docmind-ingestion/src docmind-ingestion/src
 COPY docmind-core/src docmind-core/src
 COPY docmind-api/src docmind-api/src
+COPY docmind-eureka-server/src docmind-eureka-server/src
+COPY docmind-gateway/src docmind-gateway/src
 
 # Build, skipping tests (tests run in CI before this Docker build step)
 RUN ./mvnw package -pl docmind-api -am -DskipTests -B

@@ -36,6 +36,21 @@ import com.docmind.ingestion.config.IngestionProperties;
 @EnableRetry
 public class DocMindApplication {
 
+    public DocMindApplication(org.springframework.core.env.Environment env) {
+        System.out.println(">>> CHROMADB DIAGNOSTIC: Dumping all spring.ai properties:");
+        if (env instanceof org.springframework.core.env.AbstractEnvironment) {
+            for (org.springframework.core.env.PropertySource<?> source : ((org.springframework.core.env.AbstractEnvironment) env).getPropertySources()) {
+                if (source instanceof org.springframework.core.env.EnumerablePropertySource) {
+                    for (String name : ((org.springframework.core.env.EnumerablePropertySource<?>) source).getPropertyNames()) {
+                        if (name.startsWith("spring.ai")) {
+                            System.out.println("  [" + source.getName() + "] " + name + "=" + source.getProperty(name));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     public static void main(String[] args) {
         SpringApplication.run(DocMindApplication.class, args);
     }

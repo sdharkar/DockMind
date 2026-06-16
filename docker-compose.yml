@@ -21,7 +21,7 @@ services:
 
   # ── ChromaDB — Vector Store ───────────────────────────────────────────────
   chromadb:
-    image: chromadb/chroma:latest
+    image: chromadb/chroma:0.5.20
     container_name: docmind-chroma
     ports:
       - "8000:8000"
@@ -31,7 +31,7 @@ services:
       - CHROMA_SERVER_HOST=0.0.0.0
       - ANONYMIZED_TELEMETRY=false    # Disable telemetry for privacy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      test: ["CMD", "chroma", "-V"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -56,7 +56,7 @@ services:
     volumes:
       - ollama_data:/root/.ollama    # Cache pulled models
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD", "ollama", "list"]
       interval: 15s
       timeout: 10s
       retries: 5
